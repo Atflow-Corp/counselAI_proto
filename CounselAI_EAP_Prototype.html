@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CounselAI for EAP — 워킹 프로토타입</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+           background: #EDF2F7; color: #1A202C; font-size: 14px; line-height: 1.5; }
+
+    /* ─── Layout ─────────────────────────────────────── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar { width: 270px; min-width: 270px; background: #1A2B4A; color: #fff;
+               display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+    .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .scroll-area { flex: 1; overflow-y: auto; padding: 22px; }
+
+    /* ─── Sidebar ─────────────────────────────────────── */
+    .sb-logo { padding: 18px 20px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .sb-logo-title { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; }
+    .sb-logo-title span { color: #63B3ED; }
+    .sb-logo-sub { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+
+    .sb-counselor { padding: 12px 20px; background: rgba(255,255,255,0.05);
+                    display: flex; align-items: center; gap: 10px; }
+    .sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: #2B6CB0;
+                 display: flex; align-items: center; justify-content: center;
+                 font-size: 13px; font-weight: 800; flex-shrink: 0; }
+    .sb-name { font-size: 13px; font-weight: 600; }
+    .sb-role { font-size: 10px; color: rgba(255,255,255,0.4); }
+
+    .sb-section { padding: 10px 20px 4px; font-size: 9px; letter-spacing: 1.2px;
+                  text-transform: uppercase; color: rgba(255,255,255,0.35); }
+
+    .client-row { padding: 10px 20px; cursor: pointer; border-left: 3px solid transparent;
+                  transition: background 0.15s; position: relative; }
+    .client-row:hover { background: rgba(255,255,255,0.06); }
+    .client-row.sel { background: rgba(99,179,237,0.15); border-left-color: #63B3ED; }
+    .cr-time { font-size: 10px; color: rgba(255,255,255,0.35); margin-bottom: 2px; }
+    .cr-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+    .cr-issue { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+    .cr-dots { display: flex; gap: 4px; margin-top: 5px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+    .dot.done { background: #68D391; }
+    .dot.cur { background: #63B3ED; animation: dotPulse 1.5s infinite; }
+
+    .sb-footer { margin-top: auto; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .sb-footer-text { font-size: 10px; color: rgba(255,255,255,0.25); line-height: 1.8; }
+
+    /* ─── Top Nav ─────────────────────────────────────── */
+    .topnav { background: #fff; padding: 10px 22px; border-bottom: 1px solid #E2E8F0;
+              display: flex; align-items: center; justify-content: space-between;
+              flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .breadcrumb { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #718096; }
+    .breadcrumb a { color: #3182CE; cursor: pointer; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb b { color: #1A202C; }
+    .demo-pill { background: linear-gradient(135deg,#667EEA,#764BA2); color: #fff;
+                 padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+
+    /* ─── Phase Bar ───────────────────────────────────── */
+    .phase-bar { background: #fff; padding: 12px 22px; border-bottom: 1px solid #E2E8F0;
+                 display: flex; align-items: center; flex-shrink: 0; }
+    .phase-item { flex: 1; display: flex; flex-direction: column; align-items: center;
+                  gap: 4px; position: relative; }
+    .phase-item::after { content: ''; position: absolute; top: 13px; left: 55%;
+                          width: 90%; height: 2px; background: #E2E8F0; }
+    .phase-item:last-child::after { display: none; }
+    .phase-circle { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #CBD5E0;
+                    background: #fff; color: #A0AEC0; font-size: 11px; font-weight: 700;
+                    display: flex; align-items: center; justify-content: center; z-index: 1;
+                    position: relative; transition: all 0.3s; }
+    .phase-circle.active { border-color: #3182CE; background: #3182CE; color: #fff; }
+    .phase-circle.done { border-color: #48BB78; background: #48BB78; color: #fff; }
+    .phase-name { font-size: 10px; color: #A0AEC0; }
+    .phase-name.active { color: #3182CE; font-weight: 700; }
+    .phase-name.done { color: #48BB78; }
+
+    /* ─── Cards ───────────────────────────────────────── */
+    .card { background: #fff; border-radius: 12px; padding: 18px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07); margin-bottom: 14px; }
+    .card-hd { display: flex; align-items: center; justify-content: space-between;
+               margin-bottom: 12px; }
+    .card-title { font-size: 13px; font-weight: 700; color: #1A202C;
+                  display: flex; align-items: center; gap: 7px; }
+
+    /* ─── Badges ──────────────────────────────────────── */
+    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px;
+             border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge-low { background: #F0FFF4; color: #276749; }
+    .badge-mid { background: #FFFBEB; color: #975A16; }
+    .badge-high { background: #FFF5F5; color: #9B2335; }
+    .badge-ai { background: #EBF8FF; color: #2B6CB0; }
+    .badge-done { background: #F0FFF4; color: #276749; }
+
+    /* ─── Buttons ─────────────────────────────────────── */
+    .btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 16px;
+           border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+           border: none; transition: all 0.15s; user-select: none; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: #3182CE; color: #fff; }
+    .btn-primary:hover { background: #2B6CB0; }
+    .btn-success { background: #38A169; color: #fff; }
+    .btn-success:hover { background: #2F855A; }
+    .btn-danger { background: #E53E3E; color: #fff; }
+    .btn-danger:hover { background: #C53030; }
+    .btn-ghost { background: transparent; color: #4A5568; border: 1.5px solid #CBD5E0; }
+    .btn-ghost:hover { background: #F7FAFC; }
+    .btn-sm { padding: 4px 11px; font-size: 12px; }
+    .btn-lg { padding: 11px 26px; font-size: 14px; border-radius: 10px; }
+    .btn-row { display: flex; justify-content: flex-end; gap: 9px; margin-top: 6px; }
+
+    /* ─── Stats Grid ──────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+    .stat-box { background: #fff; border-radius: 12px; padding: 16px; text-align: center;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+    .stat-val { font-size: 28px; font-weight: 800; color: #1A2B4A; }
+    .stat-lbl { font-size: 11px; color: #718096; margin-top: 3px; }
+
+    /* ─── Appointment Card ────────────────────────────── */
+    .appt-card { background: #fff; border-radius: 12px; padding: 14px 18px;
+                 box-shadow: 0 1px 3px rgba(0,0,0,0.07); margin-bottom: 10px;
+                 display: flex; align-items: center; gap: 14px;
+                 cursor: pointer; transition: box-shadow 0.2s, transform 0.1s; }
+    .appt-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1); transform: translateY(-1px); }
+    .appt-time { font-size: 15px; font-weight: 800; color: #1A2B4A; min-width: 55px; }
+    .appt-divider { width: 1px; height: 36px; background: #E2E8F0; }
+    .appt-info { flex: 1; }
+    .appt-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .appt-issues { font-size: 11px; color: #718096; margin-top: 2px; }
+
+    /* ─── Pre-Session ─────────────────────────────────── */
+    .client-hero { background: linear-gradient(135deg, #1A2B4A 0%, #2B6CB0 100%);
+                   border-radius: 12px; padding: 20px; color: #fff; margin-bottom: 14px; }
+    .hero-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .hero-tag { background: rgba(255,255,255,0.15); color: #fff; padding: 2px 10px;
+                border-radius: 999px; font-size: 11px; font-weight: 600; }
+
+    .alert-box { border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
+                 display: flex; gap: 10px; align-items: flex-start; }
+    .alert-high { background: #FFF5F5; border: 1px solid #FEB2B2; }
+    .alert-mid { background: #FFFBEB; border: 1px solid #FAF089; }
+    .alert-low { background: #F0FFF4; border: 1px solid #9AE6B4; }
+    .alert-title { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+    .alert-high .alert-title { color: #9B2335; }
+    .alert-mid .alert-title { color: #975A16; }
+    .alert-low .alert-title { color: #276749; }
+    .alert-body { font-size: 12px; color: #4A5568; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+    .info-label { font-size: 10px; color: #718096; text-transform: uppercase;
+                  letter-spacing: 0.5px; margin-bottom: 4px; }
+    .info-val { font-size: 13px; font-weight: 600; color: #1A202C; }
+
+    .intv-item { display: flex; align-items: flex-start; gap: 9px; padding: 9px;
+                 background: #F7FAFC; border-radius: 8px; margin-bottom: 7px; }
+    .intv-num { width: 20px; height: 20px; border-radius: 50%; background: #3182CE;
+                color: #fff; font-size: 10px; font-weight: 700;
+                display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .intv-text { font-size: 12px; color: #2D3748; }
+    .intv-tag { display: inline-block; font-size: 10px; background: #EBF8FF; color: #2B6CB0;
+                padding: 1px 6px; border-radius: 4px; font-weight: 700; margin-top: 3px; }
+
+    .resource-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px;
+                     background: #EBF8FF; color: #2B6CB0; border-radius: 8px;
+                     font-size: 11px; font-weight: 600; margin: 3px; }
+
+    /* ─── In-Session ──────────────────────────────────── */
+    .timer-display { font-size: 42px; font-weight: 900; color: #1A2B4A;
+                     letter-spacing: 3px; font-variant-numeric: tabular-nums; }
+    .timer-display.warn { color: #C05621; }
+    .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #E53E3E;
+               display: inline-block; margin-right: 4px;
+               animation: recPulse 1.4s ease-in-out infinite; }
+
+    .transcript-box { background: #FAFAFA; border-radius: 10px; padding: 14px;
+                      max-height: 260px; overflow-y: auto; border: 1px solid #E2E8F0; }
+    .t-line { margin-bottom: 10px; animation: slideUp 0.3s ease; }
+    .t-speaker { font-size: 10px; font-weight: 700; margin-bottom: 2px; }
+    .t-counselor { color: #3182CE; }
+    .t-client { color: #6B46C1; }
+    .t-text { font-size: 13px; color: #2D3748; line-height: 1.55; }
+    .t-risk { background: rgba(229,62,62,0.15); color: #9B2335;
+              border-radius: 3px; padding: 1px 3px; font-weight: 700; }
+    .t-caution { background: rgba(237,137,54,0.18); color: #C05621;
+                 border-radius: 3px; padding: 1px 3px; font-weight: 600; }
+
+    .struct-bar { display: flex; border-radius: 8px; overflow: hidden; margin-top: 10px; }
+    .struct-step { flex: 1; padding: 7px 4px; text-align: center; font-size: 11px;
+                   font-weight: 600; background: #F7FAFC; color: #A0AEC0; transition: all 0.3s; }
+    .struct-step.done { background: #48BB78; color: #fff; }
+    .struct-step.active { background: #3182CE; color: #fff; }
+
+    .risk-alert { background: #FFF5F5; border: 2px solid #FC8181; border-radius: 10px;
+                  padding: 12px 14px; animation: slideUp 0.4s ease; }
+
+    /* ─── Post-Session ────────────────────────────────── */
+    .soap-block { margin-bottom: 12px; }
+    .soap-lbl { font-size: 11px; font-weight: 700; color: #3182CE; text-transform: uppercase;
+                letter-spacing: 0.6px; margin-bottom: 5px; }
+    .soap-text { font-size: 12px; color: #2D3748; line-height: 1.7; background: #F7FAFC;
+                 border-radius: 7px; padding: 9px 12px; border: 1.5px solid transparent;
+                 cursor: text; transition: border-color 0.2s; }
+    .soap-text.editing { border-color: #3182CE; background: #EBF8FF; outline: none; }
+    .soap-ta { width: 100%; font-size: 12px; color: #2D3748; line-height: 1.7;
+               background: #EBF8FF; border-radius: 7px; padding: 9px 12px;
+               border: 1.5px solid #3182CE; resize: vertical; min-height: 60px;
+               font-family: inherit; outline: none; }
+
+    .progress-box { background: #F0FFF4; border-radius: 8px; padding: 10px 14px;
+                    font-size: 12px; color: #276749; font-weight: 600; margin-top: 8px; }
+
+    .email-preview { background: #F7FAFC; border: 1px solid #E2E8F0; border-radius: 8px;
+                     padding: 12px; font-size: 12px; color: #4A5568; line-height: 1.9; }
+
+    .hr-toggle-row { display: flex; align-items: center; justify-content: space-between; }
+    .toggle { width: 40px; height: 22px; border-radius: 11px; background: #CBD5E0;
+              cursor: pointer; position: relative; transition: background 0.2s;
+              border: none; flex-shrink: 0; }
+    .toggle.on { background: #48BB78; }
+    .toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px;
+                     height: 16px; border-radius: 50%; background: #fff;
+                     transition: left 0.2s; }
+    .toggle.on::after { left: 21px; }
+    .hr-data { background: #F0FFF4; border: 1px solid #C6F6D5; border-radius: 8px;
+               padding: 12px; margin-top: 10px; font-size: 12px; color: #2D3748; line-height: 1.9; }
+
+    /* ─── Loading ─────────────────────────────────────── */
+    .loading-wrap { display: flex; flex-direction: column; align-items: center;
+                    justify-content: center; padding: 48px; gap: 14px; }
+    .spinner { width: 34px; height: 34px; border: 3px solid #E2E8F0;
+               border-top-color: #3182CE; border-radius: 50%;
+               animation: spin 0.75s linear infinite; }
+    .loading-title { font-size: 14px; color: #4A5568; font-weight: 600; }
+    .loading-sub { font-size: 12px; color: #A0AEC0; }
+    .loading-steps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+    .loading-step { font-size: 11px; padding: 3px 10px; border-radius: 999px;
+                    background: #EBF8FF; color: #2B6CB0; font-weight: 600;
+                    animation: stepFade 0.5s ease both; }
+    .loading-step:nth-child(1) { animation-delay: 0.3s; }
+    .loading-step:nth-child(2) { animation-delay: 1.0s; }
+    .loading-step:nth-child(3) { animation-delay: 1.8s; }
+
+    /* ─── SVG Chart ───────────────────────────────────── */
+    .chart-wrap { position: relative; }
+    .chart-label { font-size: 11px; color: #718096; margin-bottom: 5px; }
+
+    /* ─── AI Insight Box ──────────────────────────────── */
+    .insight-box { background: linear-gradient(135deg, #EBF8FF, #E0EEFF);
+                   border: 1px solid #BEE3F8; border-radius: 10px; padding: 14px; }
+    .insight-title { font-size: 12px; font-weight: 700; color: #2B6CB0; margin-bottom: 7px; }
+    .insight-line { font-size: 12px; color: #4A5568; line-height: 1.8; }
+
+    /* ─── Guide Banner ────────────────────────────────── */
+    .guide-banner { background: linear-gradient(135deg, #1A2B4A, #2B6CB0);
+                    border-radius: 10px; padding: 14px 18px; color: #fff; margin-bottom: 18px;
+                    display: flex; align-items: center; gap: 12px; }
+    .guide-text { font-size: 12px; line-height: 1.7; }
+
+    /* ─── Animations ──────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes recPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes dotPulse { 0%,100% { opacity: 1; transform: scale(1); }
+                          50% { opacity: 0.6; transform: scale(1.3); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(8px); }
+                         to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes stepFade { from { opacity: 0; transform: scale(0.9); }
+                          to { opacity: 1; transform: scale(1); } }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    .slide-up { animation: slideUp 0.4s ease both; }
+
+    /* ─── Scrollbar ───────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    /* ═══════════════════════════════════════════════════════
+       MOCK DATA
+    ═══════════════════════════════════════════════════════ */
+    const CLIENTS = [
+      { id: 1, code: "내담자 A", time: "09:00", sessionNum: 3, totalSessions: 6,
+        riskLevel: "low", issues: ["직장 스트레스", "적응 어려움"],
+        phq9: [8, 7, 5], gad7: [9, 7, 6], done: true },
+      { id: 2, code: "내담자 B", time: "10:30", sessionNum: 4, totalSessions: 6,
+        riskLevel: "medium", issues: ["직장 내 대인관계 갈등", "경도 우울"],
+        phq9: [12, 10, 9, 8], gad7: [8, 7, 6, 6], done: false, flagged: true },
+      { id: 3, code: "내담자 C", time: "13:00", sessionNum: 2, totalSessions: 8,
+        riskLevel: "medium", issues: ["범불안장애 의심", "번아웃"],
+        phq9: [7, 9], gad7: [15, 14], done: false },
+      { id: 4, code: "내담자 D", time: "15:00", sessionNum: 1, totalSessions: 6,
+        riskLevel: "high", issues: ["위기 개입", "자해 위험 이력"],
+        phq9: [18], gad7: [16], done: false, flagged: true },
+    ];
+
+    const BRIEFING = {
+      summary: "3회기에서 내담자는 팀장과의 반복적 갈등으로 인한 직장 내 무력감을 보고하였습니다. CBT 기반 인지 재구조화 기법을 소개하고 사고 기록지 과제를 제공하였으며 과제 수행률은 3/7일(43%)로 확인되었습니다.",
+      beliefs: ["개인화(Personalizing)", "이분법적 사고(All-or-Nothing)"],
+      symptoms: ["수면 질 저하 — 평균 5시간/일", "식욕 감소"],
+      goals: { short: "직장 내 대처 전략 강화 및 자기 효능감 회복",
+               long: "자기 주장 훈련을 통한 지속적 대인관계 개선" },
+      interventions: [
+        { text: "인지 재구조화 심화 — 핵심 믿음(Core Belief) 탐색", tag: "CBT" },
+        { text: "자기 주장 훈련 (Assertiveness Training) 시작", tag: "행동치료" },
+        { text: "수면 위생 교육 및 이완 기법 소개", tag: "정신교육" },
+      ],
+      resources: ["강남구 정신건강복지센터", "직장 내 괴롭힘 법률 자문", "수면 위생 워크시트"],
+      riskNote: "현재 자해·자살 관련 발언 없음. 수면 및 식욕 변화로 신체 증상 모니터링 권장.",
+    };
+
+    const TRANSCRIPT = [
+      { id: 0, spk: "c", text: "안녕하세요. 지난 주 사고 기록지 과제는 어떻게 해보셨나요?" },
+      { id: 1, spk: "p", text: "음... 3번 정도 썼어요. 솔직히 쓰면서 더 화가 나더라고요." },
+      { id: 2, spk: "c", text: "어떤 상황에서 화가 나셨나요?" },
+      { id: 3, spk: "p", text: "월요일에 팀 회의가 있었는데, 제가 발표 준비를 많이 했거든요. 근데 팀장이 제 말을 끊고 다른 팀원 의견만 받아들이는 거예요." },
+      { id: 4, spk: "c", text: "그때 어떤 생각이 드셨나요?" },
+      { id: 5, spk: "p", text: "'나는 이 팀에서 필요 없는 사람이구나' 라는 생각이요. 그리고 요즘 솔직히 회사 다니기 싫어서...",
+        risk: ["필요 없는 사람"], caution: ["다니기 싫어서"] },
+      { id: 6, spk: "c", text: "아침에 일어나기가 많이 힘드세요?" },
+      { id: 7, spk: "p", text: "네, 한 2주 됐어요. 잠도 잘 못 자고, 밥도 잘 못 먹겠고요.",
+        caution: ["잘 못 자고", "잘 못 먹겠고"] },
+      { id: 8, spk: "c", text: "그 감정을 이번 사고 기록지에 담아 보셨나요?" },
+    ];
+
+    const SOAP = {
+      S: "내담자는 직장 내 상사로부터 반복적 무시 경험에 따른 수치심과 분노를 보고함. \"나는 이 팀에서 필요 없는 사람이구나\"라는 부정적 자동 사고 확인. 2주간 지속된 수면 어려움(기상 곤란) 및 식욕 저하 신체 증상 동반. 사고 기록지 7일 중 3일 수행.",
+      O: "내담자는 다소 위축된 자세로 내원. 발화 속도 보통, 감정 표현 초반 제한적이나 회기 중반 이후 점진적 개방. PHQ-9 자가보고: 8점(경도). 안구 접촉 회피 경향 관찰.",
+      A: "직장 내 대인관계 스트레스 기반 적응 반응, 경도 우울 증상 동반(DSM-5 F32.0). 핵심 인지 왜곡: 개인화, 이분법적 사고 패턴 지속 확인. 수면·식욕 변화로 기능 저하 일부 확인. 자해·자살 위험도: 낮음(현재 관련 사고 부재).",
+      P: "1) 핵심 믿음 탐색 심화 — 5회기 목표. 2) 수면 위생 교육 자료 제공 및 이완 기법 연습. 3) 자기 주장 훈련 시작 — 역할극 연습. 4) 2주 후 PHQ-9 재평가. 5) 식사 일지 과제 추가.",
+    };
+
+    /* ═══════════════════════════════════════════════════════
+       HELPER COMPONENTS
+    ═══════════════════════════════════════════════════════ */
+    function RiskBadge({ level }) {
+      const map = {
+        low:    { cls: "badge-low",  text: "🟢 위험도: 낮음" },
+        medium: { cls: "badge-mid",  text: "🟡 위험도: 주의" },
+        high:   { cls: "badge-high", text: "🔴 위험도: 높음" },
+      };
+      const m = map[level] || map.low;
+      return <span className={`badge ${m.cls}`}>{m.text}</span>;
+    }
+
+    function PHQChart({ scores, label = "PHQ-9", max = 27 }) {
+      if (!scores || scores.length === 0) return null;
+      const W = 290, H = 110, PX = 28, PY = 18;
+      const toX = (i) => scores.length === 1 ? W / 2 : PX + (i / (scores.length - 1)) * (W - PX * 2);
+      const toY = (v) => PY + ((max - v) / max) * (H - PY * 2 - 8);
+      const pts = scores.map((s, i) => ({ x: toX(i), y: toY(s), s }));
+      const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+      const gridY = [5, 10, 15, 20];
+      return (
+        <div className="chart-wrap">
+          <div className="chart-label">{label} 점수 추이</div>
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+            {gridY.map(v => {
+              const y = toY(v);
+              return (
+                <g key={v}>
+                  <line x1={PX} y1={y} x2={W - PX} y2={y} stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3,2" />
+                  <text x={PX - 5} y={y + 4} fontSize="9" fill="#A0AEC0" textAnchor="end">{v}</text>
+                </g>
+              );
+            })}
+            {scores.length > 1 && (
+              <path d={pathD} fill="none" stroke="#3182CE" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            )}
+            {pts.map((p, i) => (
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r="5"
+                  fill={i === pts.length - 1 ? "#3182CE" : "#fff"}
+                  stroke="#3182CE" strokeWidth="2.5" />
+                <text x={p.x} y={p.y - 9} fontSize="10" fill="#3182CE" fontWeight="700" textAnchor="middle">{p.s}</text>
+                <text x={p.x} y={H - 2} fontSize="9" fill="#A0AEC0" textAnchor="middle">{i + 1}회</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      );
+    }
+
+    function PhaseBar({ phase }) {
+      const phases = [
+        { key: "pre", label: "상담 전 브리핑" },
+        { key: "in",  label: "상담 중 보조" },
+        { key: "post", label: "상담 후 처리" },
+      ];
+      const idx = phases.findIndex(p => p.key === phase);
+      return (
+        <div className="phase-bar">
+          {phases.map((p, i) => {
+            const isActive = i === idx;
+            const isDone = i < idx;
+            return (
+              <div key={p.key} className="phase-item">
+                <div className={`phase-circle ${isActive ? "active" : isDone ? "done" : ""}`}>
+                  {isDone ? "✓" : i + 1}
+                </div>
+                <div className={`phase-name ${isActive ? "active" : isDone ? "done" : ""}`}>{p.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       DASHBOARD
+    ═══════════════════════════════════════════════════════ */
+    function Dashboard({ clients, onStartBriefing }) {
+      const flagged = clients.filter(c => c.flagged).length;
+      const completed = clients.filter(c => c.done).length;
+      return (
+        <div className="scroll-area fade-in">
+          <div style={{ marginBottom: 18 }}>
+            <h2 style={{ fontSize: 19, fontWeight: 800, color: "#1A2B4A", marginBottom: 4 }}>
+              안녕하세요, 김수진 상담사님 👋
+            </h2>
+            <p style={{ color: "#718096", fontSize: 13 }}>
+              오늘 {clients.length}건의 상담이 예정되어 있습니다. AI가 모든 브리핑을 준비했습니다.
+            </p>
+          </div>
+
+          <div className="stats-grid">
+            <div className="stat-box">
+              <div className="stat-val">{clients.length}</div>
+              <div className="stat-lbl">오늘 예약 상담</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-val" style={{ color: "#E53E3E" }}>{flagged}</div>
+              <div className="stat-lbl">🚩 위험 플래그</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-val" style={{ color: "#38A169" }}>{completed}</div>
+              <div className="stat-lbl">완료된 세션</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-val" style={{ color: "#C05621" }}>{clients.length - completed}</div>
+              <div className="stat-lbl">대기 중 세션</div>
+            </div>
+          </div>
+
+          <div className="guide-banner">
+            <div style={{ fontSize: 26 }}>💡</div>
+            <div className="guide-text">
+              <strong>데모 사용 방법:</strong> 아래 내담자 카드 클릭 → <strong>AI 브리핑</strong>으로 상담 전 준비
+              → <strong>세션 시작</strong>으로 실시간 보조 → <strong>세션 종료</strong>로 AI 노트 자동 생성
+            </div>
+          </div>
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#4A5568", marginBottom: 9 }}>오늘의 상담 일정</div>
+          {clients.map(client => (
+            <div key={client.id} className="appt-card" onClick={() => onStartBriefing(client)}>
+              <div className="appt-time">{client.time}</div>
+              <div className="appt-divider" />
+              <div className="appt-info">
+                <div className="appt-name">
+                  {client.code}
+                  {client.flagged && (
+                    <span style={{ fontSize: 10, background: "#FFF5F5", color: "#E53E3E",
+                                   padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>🚩 플래그</span>
+                  )}
+                  {client.done && <span className="badge badge-done">✓ 완료</span>}
+                </div>
+                <div className="appt-issues">{client.issues.join(" · ")}</div>
+              </div>
+              <RiskBadge level={client.riskLevel} />
+              <div style={{ color: "#A0AEC0", fontSize: 11, minWidth: 70, textAlign: "right" }}>
+                {client.sessionNum}/{client.totalSessions}회기
+              </div>
+              <button className="btn btn-primary btn-sm"
+                onClick={e => { e.stopPropagation(); onStartBriefing(client); }}>
+                {client.done ? "✓ 완료됨" : "AI 브리핑 →"}
+              </button>
+            </div>
+          ))}
+
+          <div className="insight-box" style={{ marginTop: 6 }}>
+            <div className="insight-title">🤖 AI 오늘의 주요 알림</div>
+            <div className="insight-line">
+              • <strong>내담자 D</strong>: 초회 세션 + 자해 위험 이력 — 세션 전 위기 개입 프로토콜 확인 강력 권장<br />
+              • <strong>내담자 B</strong>: PHQ-9 2회 연속 감소 (12→8) — 긍정적 변화 강화 전략 지속 유효<br />
+              • <strong>내담자 C</strong>: GAD-7 14점 → 범불안 기준치(≥15) 근접, 심층 평가 고려 필요
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PRE-SESSION BRIEFING
+    ═══════════════════════════════════════════════════════ */
+    function PreSession({ client, onStartSession }) {
+      const b = client.id === 2 ? BRIEFING : {
+        summary: `${client.sessionNum}회기까지의 내용을 AI가 분석하였습니다. 핵심 이슈와 목표가 정리되었습니다.`,
+        beliefs: ["분석 중"], symptoms: ["모니터링 중"],
+        goals: { short: "단기 목표 확인 중", long: "장기 목표 확인 중" },
+        interventions: [{ text: "맞춤 개입 전략 준비 중", tag: "AI 분석" }],
+        resources: ["자원 매칭 중"],
+        riskNote: "AI 위험도 분석 완료 — 상담사 최종 검토 필요",
+      };
+
+      const alertCls = client.riskLevel === "high" ? "alert-high"
+                     : client.riskLevel === "medium" ? "alert-mid" : "alert-low";
+      const alertIcon = client.riskLevel === "high" ? "🚨" : client.riskLevel === "medium" ? "⚠️" : "✅";
+      const alertText = client.riskLevel === "high" ? "위험 경보 — 즉각 확인 필요"
+                      : client.riskLevel === "medium" ? "AI 모니터링 알림" : "위험도 낮음";
+
+      return (
+        <div className="scroll-area fade-in">
+          {/* Hero */}
+          <div className="client-hero" style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 3 }}>{client.time} 예약 · {client.sessionNum}/{client.totalSessions}회기</div>
+                <h3 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>{client.code}</h3>
+                <div className="hero-tags">
+                  {client.issues.map((iss, i) => <span key={i} className="hero-tag">{iss}</span>)}
+                </div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 5 }}>AI 위험도 평가</div>
+                <RiskBadge level={client.riskLevel} />
+              </div>
+            </div>
+          </div>
+
+          {/* Alert */}
+          <div className={`alert-box ${alertCls}`}>
+            <div style={{ fontSize: 20 }}>{alertIcon}</div>
+            <div>
+              <div className="alert-title">{alertText}</div>
+              <div className="alert-body">{b.riskNote}</div>
+            </div>
+          </div>
+
+          <div className="two-col">
+            {/* Left column */}
+            <div>
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">📋 이전 세션 AI 요약</div>
+                  <span className="badge badge-ai">✨ AI 생성</span>
+                </div>
+                <p style={{ fontSize: 12, color: "#4A5568", lineHeight: 1.8, marginBottom: 12 }}>{b.summary}</p>
+                <div className="info-label">핵심 인지 왜곡</div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+                  {b.beliefs.map((bel, i) => (
+                    <span key={i} style={{ background: "#FFF5F5", color: "#C53030",
+                                           padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{bel}</span>
+                  ))}
+                </div>
+                <div className="info-label">신체 증상</div>
+                {b.symptoms.map((s, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "#C05621", marginTop: 2 }}>• {s}</div>
+                ))}
+              </div>
+
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">🎯 세션 목표</div>
+                </div>
+                <div style={{ marginBottom: 9 }}>
+                  <div className="info-label">단기 목표</div>
+                  <div style={{ fontSize: 12, color: "#2D3748", marginTop: 3 }}>{b.goals.short}</div>
+                </div>
+                <div>
+                  <div className="info-label">장기 목표</div>
+                  <div style={{ fontSize: 12, color: "#2D3748", marginTop: 3 }}>{b.goals.long}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div>
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">💡 AI 추천 개입 방법</div>
+                  <span className="badge badge-ai">✨ AI 생성</span>
+                </div>
+                {b.interventions.map((it, i) => (
+                  <div key={i} className="intv-item">
+                    <div className="intv-num">{i + 1}</div>
+                    <div>
+                      <div className="intv-text">{it.text}</div>
+                      <span className="intv-tag">{it.tag}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">📦 매칭된 자원</div>
+                </div>
+                <div>
+                  {b.resources.map((r, i) => (
+                    <span key={i} className="resource-chip">📍 {r}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">📊 PHQ-9 진행 추이</div>
+                </div>
+                <PHQChart scores={client.phq9} />
+              </div>
+            </div>
+          </div>
+
+          <div className="btn-row">
+            <button className="btn btn-ghost">🖨️ 브리핑 출력</button>
+            <button className="btn btn-primary btn-lg" onClick={onStartSession}>
+              ▶ 세션 시작
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       IN-SESSION ASSIST
+    ═══════════════════════════════════════════════════════ */
+    function InSession({ client, onEndSession }) {
+      const [secs, setSecs] = useState(0);
+      const [lines, setLines] = useState([]);
+      const [riskShown, setRiskShown] = useState(false);
+      const [structure, setStructure] = useState(0);
+      const [running, setRunning] = useState(true);
+      const txRef = useRef(null);
+
+      // Timer
+      useEffect(() => {
+        if (!running) return;
+        const t = setInterval(() => setSecs(s => s + 1), 1000);
+        return () => clearInterval(t);
+      }, [running]);
+
+      // Session structure based on time
+      useEffect(() => {
+        if (secs < 60) setStructure(0);
+        else if (secs < 150) setStructure(1);
+        else if (secs < 240) setStructure(2);
+        else setStructure(3);
+      }, [secs]);
+
+      // Transcript animation
+      useEffect(() => {
+        const delays = [900, 2600, 1700, 4100, 1600, 3800, 2000, 3600, 2400];
+        let cum = 0;
+        const tids = TRANSCRIPT.map((line, i) => {
+          cum += (delays[i] || 2200);
+          return setTimeout(() => {
+            setLines(prev => [...prev, line]);
+            if (line.risk) setRiskShown(true);
+          }, cum);
+        });
+        return () => tids.forEach(clearTimeout);
+      }, []);
+
+      // Auto-scroll transcript
+      useEffect(() => {
+        if (txRef.current) txRef.current.scrollTop = txRef.current.scrollHeight;
+      }, [lines]);
+
+      const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+      function renderText(text, risk, caution) {
+        const allKw = [...(risk || []), ...(caution || [])];
+        if (!allKw.length) return text;
+        const parts = [];
+        let remaining = text;
+        allKw.forEach(kw => {
+          const idx = remaining.indexOf(kw);
+          if (idx !== -1) {
+            if (idx > 0) parts.push({ text: remaining.slice(0, idx), type: null });
+            parts.push({ text: kw, type: risk && risk.includes(kw) ? "risk" : "caution" });
+            remaining = remaining.slice(idx + kw.length);
+          }
+        });
+        if (remaining) parts.push({ text: remaining, type: null });
+        if (!parts.length) return text;
+        return parts.map((p, i) =>
+          p.type ? <span key={i} className={p.type === "risk" ? "t-risk" : "t-caution"}>{p.text}</span> : p.text
+        );
+      }
+
+      const structSteps = ["도입", "탐색", "개입", "마무리"];
+
+      return (
+        <div className="scroll-area fade-in">
+          <div className="two-col">
+            {/* Transcript */}
+            <div>
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">
+                    <span className="rec-dot" />
+                    실시간 전사
+                  </div>
+                  <span className="badge badge-ai">✨ AI 전사</span>
+                </div>
+                <div className="transcript-box" ref={txRef}>
+                  {lines.length === 0 && (
+                    <div style={{ textAlign: "center", color: "#A0AEC0", fontSize: 13, padding: 24 }}>
+                      전사 대기 중...
+                    </div>
+                  )}
+                  {lines.map(line => (
+                    <div key={line.id} className="t-line">
+                      <div className={`t-speaker ${line.spk === "c" ? "t-counselor" : "t-client"}`}>
+                        {line.spk === "c" ? "🎓 상담사" : "👤 내담자"}
+                      </div>
+                      <div className="t-text">
+                        {renderText(line.text, line.risk, line.caution)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {riskShown && (
+                <div className="risk-alert">
+                  <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                    <div style={{ fontSize: 22 }}>🚨</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#9B2335", marginBottom: 5 }}>
+                        AI 위험 키워드 감지됨
+                      </div>
+                      <div style={{ fontSize: 12, marginBottom: 6 }}>
+                        <span className="t-risk">"필요 없는 사람"</span>
+                        {" "} · {" "}
+                        <span className="t-caution">"다니기 싫어서"</span>
+                        {" "} · {" "}
+                        <span className="t-caution">"잘 못 자고"</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#718096" }}>
+                        우울 증상 심화 가능성 — PHQ-9 관련 항목 직접 확인 권장
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right panel */}
+            <div>
+              <div className="card" style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#718096", marginBottom: 4 }}>세션 경과 시간</div>
+                <div className={`timer-display ${secs > 2700 ? "warn" : ""}`}>{fmt(secs)}</div>
+                <div style={{ fontSize: 11, color: "#A0AEC0", marginTop: 4 }}>권장 세션 시간: 50분</div>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "center" }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setRunning(r => !r)}>
+                    {running ? "⏸ 일시정지" : "▶ 재개"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-title" style={{ marginBottom: 10 }}>📐 세션 구조 가이드</div>
+                <div className="struct-bar">
+                  {structSteps.map((s, i) => (
+                    <div key={i} className={`struct-step ${i === structure ? "active" : i < structure ? "done" : ""}`}>
+                      {s}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: "#718096", marginTop: 7 }}>
+                  현재: <strong style={{ color: "#3182CE" }}>{structSteps[structure]}</strong> 단계
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-title" style={{ marginBottom: 10 }}>📊 오늘 PHQ-9</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ textAlign: "center", flex: 1 }}>
+                    <div style={{ fontSize: 34, fontWeight: 800, color: "#3182CE" }}>8</div>
+                    <div style={{ fontSize: 11, color: "#718096" }}>현재 점수 (경도)</div>
+                  </div>
+                  <div style={{ fontSize: 22, color: "#48BB78" }}>↓</div>
+                  <div style={{ textAlign: "center", flex: 1 }}>
+                    <div style={{ fontSize: 34, fontWeight: 800, color: "#48BB78" }}>-4</div>
+                    <div style={{ fontSize: 11, color: "#718096" }}>1회기 대비 감소</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-title" style={{ marginBottom: 8 }}>🎯 세션 체크리스트</div>
+                {["핵심 믿음 탐색 확인", "수면 상태 직접 질문", "과제 수행 피드백", "다음 과제 협의"].map((item, i) => (
+                  <CheckItem key={i} label={item} defaultChecked={i < 2} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="btn-row">
+            <button className="btn btn-ghost">⏸ 메모 추가</button>
+            <button className="btn btn-danger btn-lg" onClick={onEndSession}>
+              ⏹ 세션 종료 및 AI 노트 생성
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function CheckItem({ label, defaultChecked }) {
+      const [checked, setChecked] = useState(defaultChecked || false);
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0",
+                      fontSize: 12, color: checked ? "#718096" : "#2D3748",
+                      textDecoration: checked ? "line-through" : "none",
+                      cursor: "pointer" }}
+             onClick={() => setChecked(c => !c)}>
+          <div style={{ width: 16, height: 16, borderRadius: 4,
+                        border: checked ? "none" : "2px solid #CBD5E0",
+                        background: checked ? "#48BB78" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "#fff", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+            {checked ? "✓" : ""}
+          </div>
+          {label}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       POST-SESSION
+    ═══════════════════════════════════════════════════════ */
+    function PostSession({ client, onComplete }) {
+      const [loading, setLoading] = useState(true);
+      const [soap, setSoap] = useState(SOAP);
+      const [editKey, setEditKey] = useState(null);
+      const [editVal, setEditVal] = useState("");
+      const [hrOn, setHrOn] = useState(false);
+      const [confirmed, setConfirmed] = useState(false);
+
+      useEffect(() => {
+        const t = setTimeout(() => setLoading(false), 3200);
+        return () => clearTimeout(t);
+      }, []);
+
+      const startEdit = (key) => { setEditKey(key); setEditVal(soap[key]); };
+      const saveEdit = () => {
+        if (editKey) { setSoap(prev => ({ ...prev, [editKey]: editVal })); setEditKey(null); }
+      };
+
+      const soapMeta = {
+        S: "S — Subjective (주관적 정보)",
+        O: "O — Objective (객관적 정보)",
+        A: "A — Assessment (임상 평가)",
+        P: "P — Plan (치료 계획)",
+      };
+
+      if (loading) return (
+        <div className="scroll-area">
+          <div className="card">
+            <div className="loading-wrap">
+              <div className="spinner" />
+              <div className="loading-title">AI가 세션 노트를 생성하는 중...</div>
+              <div className="loading-sub">전사 내용 분석 → 임상 정보 구조화 → SOAP 노트 작성</div>
+              <div className="loading-steps">
+                <div className="loading-step">전사 분석 완료</div>
+                <div className="loading-step">임상 구조화 중</div>
+                <div className="loading-step">SOAP 초안 생성</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="scroll-area fade-in">
+          <div className="two-col">
+            {/* SOAP Note */}
+            <div>
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">📝 AI 생성 SOAP 노트</div>
+                  <span className="badge badge-ai">✨ AI 초안</span>
+                </div>
+                <div style={{ fontSize: 11, color: "#718096", marginBottom: 12 }}>
+                  ✏️ 각 항목을 클릭하여 직접 편집하세요
+                </div>
+                {Object.entries(soapMeta).map(([key, lbl]) => (
+                  <div key={key} className="soap-block">
+                    <div className="soap-lbl">{lbl}</div>
+                    {editKey === key ? (
+                      <div>
+                        <textarea className="soap-ta" value={editVal}
+                          onChange={e => setEditVal(e.target.value)}
+                          onBlur={saveEdit} autoFocus rows={4} />
+                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                          <button className="btn btn-primary btn-sm" onClick={saveEdit}>저장</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setEditKey(null)}>취소</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="soap-text" onClick={() => startEdit(key)}>{soap[key]}</div>
+                    )}
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 7, marginTop: 14, flexWrap: "wrap" }}>
+                  <button className="btn btn-primary btn-sm"
+                    onClick={() => setConfirmed(true)}
+                    style={confirmed ? { background: "#38A169" } : {}}>
+                    {confirmed ? "✓ 노트 확정됨" : "✓ 노트 확정"}
+                  </button>
+                  <button className="btn btn-ghost btn-sm">🖨️ 출력</button>
+                  <button className="btn btn-ghost btn-sm">📤 EHR 전송</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div>
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">📈 PHQ-9 진행 추이</div>
+                </div>
+                <PHQChart scores={client.phq9} />
+                <div className="progress-box">
+                  ✅ PHQ-9 {client.phq9[0]}→{client.phq9[client.phq9.length - 1]}점 ({client.phq9[0] - client.phq9[client.phq9.length - 1]}점 감소) — 유의미한 호전 추세
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">📧 후속 자원 이메일 초안</div>
+                  <span className="badge badge-ai">✨ AI 생성</span>
+                </div>
+                <div className="email-preview">
+                  <strong>받는 사람:</strong> {client.code} (익명 처리)<br />
+                  <br />
+                  안녕하세요. 오늘 상담에 참석해 주셔서 감사합니다.<br />
+                  다음 자원들을 공유드립니다:<br />
+                  • 수면 위생 가이드 (PDF 첨부)<br />
+                  • 자기 주장 훈련 워크시트<br />
+                  • 강남구 정신건강복지센터 (02-3432-2340)<br />
+                  <br />
+                  <strong>다음 세션: 2주 후 예정</strong><br />
+                  <span style={{ color: "#718096" }}>과제: 수면 일지 작성</span>
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ marginTop: 9 }}>✉️ 발송 승인</button>
+              </div>
+
+              <div className="card">
+                <div className="card-hd">
+                  <div className="card-title">🏢 HR 익명 리포트</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ fontSize: 11, color: "#718096" }}>{hrOn ? "ON" : "OFF"}</span>
+                    <button className={`toggle ${hrOn ? "on" : ""}`} onClick={() => setHrOn(v => !v)} />
+                  </div>
+                </div>
+                {hrOn && (
+                  <div className="hr-data fade-in">
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#276749", marginBottom: 7 }}>
+                      📊 HR 대시보드 전송 예정 (완전 익명)
+                    </div>
+                    <div style={{ fontSize: 12, lineHeight: 1.9 }}>
+                      이슈 카테고리: 직장 내 대인관계 갈등<br />
+                      심도: 경도~중등도<br />
+                      세션 완료율: {client.sessionNum}/{client.totalSessions}회<br />
+                      호전 지표: PHQ-9 감소 추세 ↓<br />
+                      <span style={{ fontSize: 10, color: "#718096" }}>
+                        * 개인 식별 정보 없음 · PIPA 준수
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="btn-row">
+            <button className="btn btn-success btn-lg" onClick={onComplete}>
+              ✓ 세션 완료 — 대시보드로 돌아가기
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       APP ROOT
+    ═══════════════════════════════════════════════════════ */
+    function App() {
+      const [clients, setClients] = useState(CLIENTS);
+      const [selected, setSelected] = useState(null);
+      const [phase, setPhase] = useState("dashboard");
+
+      const goHome = () => { setSelected(null); setPhase("dashboard"); };
+
+      const startBriefing = (client) => {
+        setSelected(client);
+        setPhase("pre");
+      };
+
+      const startSession = () => setPhase("in");
+      const endSession   = () => setPhase("post");
+
+      const complete = () => {
+        setClients(prev => prev.map(c => c.id === selected.id ? { ...c, done: true } : c));
+        goHome();
+      };
+
+      const phaseLabel = { pre: "상담 전 브리핑", in: "상담 중 보조", post: "상담 후 처리" }[phase] || "";
+
+      const dotPhase = (c) => {
+        if (c.done) return ["done", "done", "done"];
+        if (selected?.id !== c.id) return [null, null, null];
+        if (phase === "pre")  return ["cur", null, null];
+        if (phase === "in")   return ["done", "cur", null];
+        if (phase === "post") return ["done", "done", "cur"];
+        return [null, null, null];
+      };
+
+      return (
+        <div className="app">
+          {/* Sidebar */}
+          <div className="sidebar">
+            <div className="sb-logo">
+              <div className="sb-logo-title">Counsel<span>AI</span></div>
+              <div className="sb-logo-sub">for EAP · 워킹 프로토타입 v0.1</div>
+            </div>
+            <div className="sb-counselor">
+              <div className="sb-avatar">김</div>
+              <div>
+                <div className="sb-name">김수진 상담사</div>
+                <div className="sb-role">수석 EAP 상담사</div>
+              </div>
+            </div>
+
+            <div className="sb-section">오늘의 상담 ({clients.length}건)</div>
+            {clients.map(c => {
+              const dots = dotPhase(c);
+              return (
+                <div key={c.id}
+                  className={`client-row ${selected?.id === c.id ? "sel" : ""}`}
+                  onClick={() => startBriefing(c)}>
+                  <div className="cr-time">{c.time}</div>
+                  <div className="cr-name">
+                    {c.code}
+                    {c.flagged && <span style={{ fontSize: 9, color: "#FC8181" }}>🚩</span>}
+                  </div>
+                  <div className="cr-issue">{c.issues[0]}</div>
+                  <div className="cr-dots">
+                    <div className={`dot ${dots[0] || (c.done ? "done" : "")}`} />
+                    <div className={`dot ${dots[1] || (c.done ? "done" : "")}`} />
+                    <div className={`dot ${dots[2] || (c.done ? "done" : "")}`} />
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="sb-footer">
+              <div className="sb-footer-text">
+                🔒 HIPAA 준수 · AES-256 암호화<br />
+                ⚠️ AI 초안 — 상담사 최종 검토 필요<br />
+                🤖 CounselAI for EAP Demo
+              </div>
+            </div>
+          </div>
+
+          {/* Main area */}
+          <div className="main-area">
+            {/* Top nav */}
+            <div className="topnav">
+              <div className="breadcrumb">
+                <a onClick={goHome}>대시보드</a>
+                {selected && <><span>›</span><span>{selected.code}</span></>}
+                {phase !== "dashboard" && <><span>›</span><b>{phaseLabel}</b></>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {phase !== "dashboard" && (
+                  <button className="btn btn-ghost btn-sm" onClick={goHome}>← 대시보드</button>
+                )}
+                <span className="demo-pill">🚀 Demo v0.1</span>
+              </div>
+            </div>
+
+            {/* Phase bar */}
+            {phase !== "dashboard" && <PhaseBar phase={phase} />}
+
+            {/* Content */}
+            {phase === "dashboard" && (
+              <Dashboard clients={clients} onStartBriefing={startBriefing} />
+            )}
+            {phase === "pre" && selected && (
+              <PreSession client={selected} onStartSession={startSession} />
+            )}
+            {phase === "in" && selected && (
+              <InSession client={selected} onEndSession={endSession} />
+            )}
+            {phase === "post" && selected && (
+              <PostSession client={selected} onComplete={complete} />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
